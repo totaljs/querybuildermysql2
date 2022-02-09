@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/totaljs/querybuilderpg.git"
+    "url": "git+https://github.com/totaljs/querybuildermysql.git"
   },
   "dependencies": {
     "total4": "latest",
