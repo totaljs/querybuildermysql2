@@ -13,7 +13,7 @@ __Initialization__:
 // pooling {Number} max. clients (default: "0" (disabled))
 // errorhandling {Function(err, cmd)}
 
-require('querybuildermysql').init('default', CONF.database);
+require('querybuildermysql2').init('default', CONF.database);
 // require('querybuildermysql').init('default', CONF.database, 10);
 ```
 

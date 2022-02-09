@@ -1,5 +1,5 @@
 {
-  "name": "querybuildermysql",
+  "name": "querybuildermysql2",
   "version": "1.0.0",
   "description": "MySQL integrator",
   "main": "index.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/totaljs/querybuildermysql.git"
+    "url": "git+https://github.com/totaljs/querybuildermysql2.git"
   },
   "dependencies": {
     "total4": "latest",
@@ -21,7 +21,7 @@
   "author": "Peter Sirka",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/totaljs/querybuildermysql/issues"
+    "url": "https://github.com/totaljs/querybuildermysql2/issues"
   },
-  "homepage": "https://github.com/totaljs/querybuildermysql#readme"
+  "homepage": "https://github.com/totaljs/querybuildermysql2#readme"
 }
