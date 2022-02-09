@@ -1,0 +1,27 @@
+{
+  "name": "querybuildermysql",
+  "version": "1.0.0",
+  "description": "MySQL integrator",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/totaljs/querybuilderpg.git"
+  },
+  "dependencies": {
+    "total4": "latest",
+    "mysql2": "latest"
+  },
+  "keywords": [
+    "orm",
+    "mysql"
+  ],
+  "author": "Peter Sirka",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/totaljs/querybuildermysql/issues"
+  },
+  "homepage": "https://github.com/totaljs/querybuildermysql#readme"
+}
