@@ -3,11 +3,12 @@
 A simple QueryBuilder integrator for MySQL database.
 
 - [Documentation](https://docs.totaljs.com/total4/)
+- `$ npm install querybuildermysql2`
 
 __Initialization__:
 
 ```js
-// require('querybuildermysql').init(name, connectionstring, pooling, [errorhandling]);
+// require('querybuildermysql2').init(name, connectionstring, pooling, [errorhandling]);
 // name {String} a name of DB (default: "default")
 // connectionstring {String} a connection to the MySQL
 // pooling {Number} max. clients (default: "0" (disabled))
