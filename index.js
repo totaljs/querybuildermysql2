@@ -374,10 +374,16 @@ exports.init = function(name, connstring, pooling, errorhandling) {
 		pooling = +pooling;
 
 	if (!connstring) {
+
 		if (POOLS[name]) {
-			POOLS[name].end();
+			var conn = POOLS[name];
+			conn.end && conn.end();
+			conn.destroy && conn.destroy();
 			delete POOLS[name];
 		}
+
+		// Removes instance
+		NEWDB(name, null);
 		return;
 	}
 
