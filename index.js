@@ -63,6 +63,9 @@ function exec(client, filter, callback, done, errorhandling) {
 			case 'remove':
 				callback(null, response.affectedRows || 0);
 				break;
+			case 'check':
+				callback(null, response ? response > 0 : false);
+				break;
 			default:
 				callback(err, response);
 				break;
@@ -249,6 +252,10 @@ function makesql(opt, exec) {
 			query = 'UPDATE ' + opt.table + ' SET ' + tmp.query.join(',') + (where.length ? (' WHERE ' + where.join(' ')) : '');
 			params = tmp.params;
 			break;
+		case 'check':
+			query = 'SELECT 1 as count FROM ' + opt.table + (where.length ? (' WHERE ' + where.join(' ')) : '');
+			isread = true;
+			break;
 		case 'drop':
 			query = 'DROP TABLE ' + opt.table;
 			break;
@@ -280,7 +287,7 @@ function makesql(opt, exec) {
 			break;
 	}
 
-	if (exec === 'find' || exec === 'read' || exec === 'list' || exec === 'query') {
+	if (exec === 'find' || exec === 'read' || exec === 'list' || exec === 'query' || exec === 'check') {
 
 		if (opt.sort) {
 			query += ' ORDER BY';
