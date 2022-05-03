@@ -106,7 +106,10 @@ function db_where(where, filter, operator) {
 				break;
 			case 'where':
 				where.length && where.push(operator);
-				where.push(item.name + item.comparer + MYSQL_ESCAPE(item.value));
+				if (item.value == null)
+					where.push(item.name + (item.comparer === '=' ? ' IS NULL' : ' IS NOT NULL'));
+				else
+					where.push(item.name + item.comparer + MYSQL_ESCAPE(item.value));
 				break;
 			case 'contains':
 				where.length && where.push(operator);
