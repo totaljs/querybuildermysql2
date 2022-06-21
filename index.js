@@ -4,6 +4,7 @@ const CANSTATS = global.F ? (global.F.stats && global.F.stats.performance && glo
 const MySQL = require('mysql2');
 const POOLS = {};
 const LOGGER = '-- MySQL -->';
+const REG_LANGUAGE = /[a-z0-9]+§/gi;
 
 function exec(client, filter, callback, done, errorhandling) {
 
@@ -73,15 +74,19 @@ function exec(client, filter, callback, done, errorhandling) {
 	});
 }
 
-function db_where(where, filter, operator) {
+function db_where(where, opt, filter, operator) {
 
 	var tmp;
 
 	for (var item of filter) {
+
+		if (opt.language != null && item.name && item.name[item.name.length - 1] === '§')
+			item.name = item.name.substring(0, item.name.length - 1) + opt.language;
+
 		switch (item.type) {
 			case 'or':
 				tmp = [];
-				db_where(tmp, item.value, 'OR');
+				db_where(tmp, opt, item.value, 'OR');
 				where.length && where.push(operator);
 				where.push('(' + tmp.join(' ') + ')');
 				break;
@@ -212,6 +217,13 @@ function db_insertupdate(filter, insert) {
 	return { fields, query, params };
 }
 
+function replacelanguage(fields, language, noas) {
+	return fields.replace(REG_LANGUAGE, function(val) {
+		val = val.substring(0, val.length - 1);
+		return val + (noas ? language : (language ? (language + ' as ' + val) : ''));
+	});
+}
+
 function makesql(opt, exec) {
 
 	var query = '';
@@ -225,7 +237,10 @@ function makesql(opt, exec) {
 	if (!exec)
 		exec = opt.exec;
 
-	db_where(where, opt.filter, 'AND');
+	db_where(where, opt, opt.filter, 'AND');
+
+	if (opt.language != null && opt.fields)
+		opt.fields = replacelanguage(opt.fields.join(','), opt.language);
 
 	switch (exec) {
 		case 'find':
@@ -293,12 +308,19 @@ function makesql(opt, exec) {
 	if (exec === 'find' || exec === 'read' || exec === 'list' || exec === 'query' || exec === 'check') {
 
 		if (opt.sort) {
-			query += ' ORDER BY';
+
+			tmp = '';
+
 			for (var i = 0; i < opt.sort.length; i++) {
 				var item = opt.sort[i];
 				index = item.lastIndexOf('_');
-				query += (i ? ', ' : ' ') + item.substring(0, index) + ' ' + (item.substring(index + 1) === 'desc' ? 'DESC' : 'ASC');
+				tmp += (i ? ', ' : ' ') + item.substring(0, index) + ' ' + (item.substring(index + 1) === 'desc' ? 'DESC' : 'ASC');
 			}
+
+			if (opt.language != null)
+				tmp = replacelanguage(tmp, opt.language, true);
+
+			query += ' ORDER BY' + tmp;
 		}
 
 		if (opt.take && opt.skip)
