@@ -418,15 +418,14 @@ exports.init = function(name, connstring, pooling, errorhandling) {
 	if (pooling)
 		pooling = +pooling;
 
+	if (POOLS[name]) {
+		var conn = POOLS[name];
+		conn.end && conn.end();
+		conn.destroy && conn.destroy();
+		delete POOLS[name];
+	}
+
 	if (!connstring) {
-
-		if (POOLS[name]) {
-			var conn = POOLS[name];
-			conn.end && conn.end();
-			conn.destroy && conn.destroy();
-			delete POOLS[name];
-		}
-
 		// Removes instance
 		NEWDB(name, null);
 		return;
