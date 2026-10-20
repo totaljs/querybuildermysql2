@@ -83,6 +83,47 @@ function exec(client, filter, callback, done, errorhandling) {
 	});
 }
 
+// Neutral name from QueryBuilder.autoqueryjson(): "json:column:property:type"
+// A missing property is NULL and a value in a wrong format never fails: Number: 0, Boolean: false (0), Date: NULL, Array: []
+// Requires MySQL 5.7+ (JSON) and the date time zone is ignored (the value is used as it is written)
+function jsonname(name, select) {
+
+	let arr = name.split(':');
+	let col = '`' + arr[1] + '`';
+	let raw = 'JSON_EXTRACT(' + col + ',\'$."' + arr[2] + '"\')';
+	let text = '(CASE WHEN ' + raw + ' IS NULL OR JSON_TYPE(' + raw + ')=\'NULL\' THEN NULL ELSE JSON_UNQUOTE(' + raw + ') END)';
+	let expr;
+
+	switch (arr[3]) {
+		case 'number':
+		case 'decimal':
+		case 'float':
+			expr = 'CASE WHEN ' + text + ' IS NULL THEN NULL WHEN ' + text + ' REGEXP \'^[[:space:]]*-?[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?[[:space:]]*$\' THEN TRIM(' + text + ')+0 ELSE 0 END';
+			break;
+		case 'boolean':
+		case 'bool':
+			expr = 'CASE WHEN ' + text + ' IS NULL THEN NULL WHEN LOWER(TRIM(' + text + ')) IN (\'true\',\'1\',\'on\',\'yes\') THEN 1 ELSE 0 END';
+			break;
+		case 'date':
+		case 'datetime':
+			// the day is compared with the last day of the month because MariaDB/MySQL accept impossible dates (e.g. 2024-02-31), STR_TO_DATE returns NULL for impossible times (e.g. 25:00)
+			let day = 'LEFT(' + text + ',10)';
+			expr = 'CASE WHEN ' + text + ' REGEXP \'^[0-9]{4}-[0-9]{2}-[0-9]{2}\' AND SUBSTRING(' + text + ',9,2)+0<=DAY(LAST_DAY(CONCAT(LEFT(' + text + ',7),\'-01\'))) THEN STR_TO_DATE(CONCAT(' + day + ',\' \',IF(LENGTH(' + text + ')>10,RPAD(SUBSTRING(' + text + ',12,8),8,\':00\'),\'00:00:00\')),\'%Y-%m-%d %H:%i:%s\') END';
+			break;
+		case '[string]':
+			expr = 'CASE WHEN ' + raw + ' IS NULL THEN NULL WHEN JSON_TYPE(' + raw + ')=\'ARRAY\' THEN ' + raw + ' ELSE JSON_ARRAY() END';
+			break;
+		default:
+			expr = text;
+			break;
+	}
+
+	if (select)
+		return expr + ' AS `' + arr[2] + '`';
+
+	return expr === text ? text : '(' + expr + ')';
+}
+
 function db_where(where, opt, filter, operator) {
 
 	var tmp;
@@ -91,6 +132,11 @@ function db_where(where, opt, filter, operator) {
 
 		if (opt.language != null && item.name && item.name[item.name.length - 1] === '§')
 			item.name = item.name.substring(0, item.name.length - 1) + opt.language;
+
+		let isjson = item.name && item.name.substring(0, 5) === 'json:';
+
+		// the neutral name is translated in the local variable
+		let name = isjson ? jsonname(item.name) : item.name;
 
 		switch (item.type) {
 			case 'or':
@@ -112,7 +158,7 @@ function db_where(where, opt, filter, operator) {
 					tmp = [MYSQL_ESCAPE(item.value)];
 				if (!tmp.length)
 					tmp.push('null');
-				where.push(item.name + (item.type === 'in' ? ' IN ' : ' NOT IN ') + '(' + tmp.join(',') + ')');
+				where.push(name + (item.type === 'in' ? ' IN ' : ' NOT IN ') + '(' + tmp.join(',') + ')');
 				break;
 			case 'query':
 				where.length && where.push(operator);
@@ -121,24 +167,37 @@ function db_where(where, opt, filter, operator) {
 			case 'where':
 				where.length && where.push(operator);
 				if (item.value == null)
-					where.push(item.name + (item.comparer === '=' ? ' IS NULL' : ' IS NOT NULL'));
+					where.push(name + (item.comparer === '=' ? ' IS NULL' : ' IS NOT NULL'));
 				else
-					where.push(item.name + item.comparer + MYSQL_ESCAPE(item.value));
+					where.push(name + item.comparer + MYSQL_ESCAPE(item.value));
 				break;
 			case 'contains':
 				where.length && where.push(operator);
-				where.push('LENGTH(' + item.name +')>0');
+				where.push('LENGTH(' + name +')>0');
 				break;
 			case 'array':
+				if (isjson && item.name.substring(item.name.length - 9) === ':[string]') {
+					where.length && where.push(operator);
+					tmp = [];
+					let arr = item.name.split(':');
+					let path = MYSQL_ESCAPE('$."' + arr[2] + '"');
+					let values = typeof(item.value) === 'string' ? item.value.split(',') : item.value;
+					for (let m of values)
+						tmp.push('JSON_CONTAINS(`' + arr[1] + '`,' + MYSQL_ESCAPE(JSON.stringify(typeof(m) === 'string' ? m.trim() : m)) + ',' + path + ')');
+					where.push('(JSON_TYPE(JSON_EXTRACT(`' + arr[1] + '`,' + path + '))=\'ARRAY\' AND (' + (tmp.length ? tmp.join(' OR ') : '0') + '))');
+					break;
+				}
 			case 'search':
 				where.length && where.push(operator);
+				if (isjson)
+					name = 'LOWER(' + name + ')';
 				tmp = item.value.toLowerCase().replace(/%/g, '');
 				if (item.operator === 'beg')
-					where.push(item.name + ' LIKE ' + MYSQL_ESCAPE('%' + tmp));
+					where.push(name + ' LIKE ' + MYSQL_ESCAPE('%' + tmp));
 				else if (item.operator === 'end')
-					where.push(item.name + ' LIKE ' + MYSQL_ESCAPE(tmp + '%'));
+					where.push(name + ' LIKE ' + MYSQL_ESCAPE(tmp + '%'));
 				else
-					where.push(item.name + ' LIKE ' + MYSQL_ESCAPE('%' + tmp + '%'));
+					where.push(name + ' LIKE ' + MYSQL_ESCAPE('%' + tmp + '%'));
 				break;
 			case 'month':
 			case 'year':
@@ -146,15 +205,15 @@ function db_where(where, opt, filter, operator) {
 			case 'hour':
 			case 'minute':
 				where.length && where.push(operator);
-				where.push(item.type + '(`' + item.name + '`)' + item.comparer + MYSQL_ESCAPE(item.value));
+				where.push(item.type + '(' + (isjson ? name : ('`' + name + '`')) + ')' + item.comparer + MYSQL_ESCAPE(item.value));
 				break;
 			case 'empty':
 				where.length && where.push(operator);
-				where.push('(' + item.name + ' IS NULL OR LENGTH(' + item.name + ')=0)');
+				where.push('(' + name + ' IS NULL OR LENGTH(' + name + ')=0)');
 				break;
 			case 'between':
 				where.length && where.push(operator);
-				where.push('(' + item.name + ' BETWEEN ' + MYSQL_ESCAPE(item.a) + ' AND ' + MYSQL_ESCAPE(item.b) + ')');
+				where.push('(' + name + ' BETWEEN ' + MYSQL_ESCAPE(item.a) + ' AND ' + MYSQL_ESCAPE(item.b) + ')');
 				break;
 		}
 	}
@@ -253,6 +312,9 @@ function makesql(opt, exec) {
 
 	db_where(where, opt, opt.filter, 'AND');
 
+	if (opt.fields instanceof Array && opt.fields.some(n => n.substring(0, 5) === 'json:'))
+		opt.fields = opt.fields.map(n => n.substring(0, 5) === 'json:' ? jsonname(n, true) : n);
+
 	if (opt.language != null && opt.fields)
 		opt.fields = replacelanguage(opt.fields.join(','), opt.language);
 
@@ -328,7 +390,7 @@ function makesql(opt, exec) {
 			for (var i = 0; i < opt.sort.length; i++) {
 				var item = opt.sort[i];
 				index = item.lastIndexOf('_');
-				tmp += (i ? ', ' : ' ') + item.substring(0, index) + ' ' + (item.substring(index + 1) === 'desc' ? 'DESC' : 'ASC');
+				tmp += (i ? ', ' : ' ') + (item.substring(0, 5) === 'json:' ? jsonname(item.substring(0, index)) : item.substring(0, index)) + ' ' + (item.substring(index + 1) === 'desc' ? 'DESC' : 'ASC');
 			}
 
 			if (opt.language != null)
@@ -385,7 +447,7 @@ function MYSQL_ESCAPE(value) {
 		return MySQL.escape(value.join(','));
 
 	if (value instanceof Date)
-		return dateToString(value);
+		return '\'' + dateToString(value) + '\'';
 
 	return MySQL.escape(value.toString());
 }
